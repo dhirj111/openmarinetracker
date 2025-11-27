@@ -55,10 +55,19 @@ exports.register = async (req, res) => {
 
     const token = generateToken(user._id);
 
+    //  set jwt in http-only cookie
+    const isProd = process.env.NODE_ENV === 'production';
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 1 day
+    });
+
     res.status(201).json({
       message: 'User registered successfully',
       user: { id: user._id, name: user.name, email: user.email },
-      token
+      token   
     });
   } catch (error) {
     console.error('Registration Error:', error);
@@ -67,6 +76,7 @@ exports.register = async (req, res) => {
 };
 
 exports.login = async (req, res) => {
+  console.log("1", req.body)
   try {
     const validation = loginSchema.safeParse(req.body);
 
@@ -76,7 +86,7 @@ exports.login = async (req, res) => {
 
     let { email, password } = validation.data;
     email = email.toLowerCase().trim();
-
+    console.log("2", validation.data)
     const user = await User.findOne({ email });
 
     if (!user)
@@ -87,6 +97,15 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
 
     const token = generateToken(user._id);
+
+    // set jwt in http-only cookie
+    const isProd = process.env.NODE_ENV === 'production';
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000
+    });
 
     res.status(200).json({
       message: 'Login successful',
