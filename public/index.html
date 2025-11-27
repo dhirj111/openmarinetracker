@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>OpenMarineTracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+      color: #222;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 20px 24px;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 26px;
+    }
+    h2 {
+      margin-top: 24px;
+      font-size: 20px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 4px;
+    }
+    .row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .card {
+      flex: 1;
+      min-width: 260px;
+      background: #fafafa;
+      border: 1px solid #eee;
+      border-radius: 6px;
+      padding: 16px;
+    }
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+      color: #555;
+    }
+    input {
+      width: 100%;
+      padding: 6px 8px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+    button {
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid #1976d2;
+      background: #1976d2;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button.secondary {
+      border-color: #888;
+      background: #fff;
+      color: #333;
+      margin-left: 6px;
+    }
+    button.danger {
+      border-color: #c62828;
+      background: #c62828;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .ships-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    .ships-table th,
+    .ships-table td {
+      border: 1px solid #eee;
+      padding: 8px;
+      text-align: left;
+    }
+    .ships-table th {
+      background: #f0f0f0;
+    }
+    .meta {
+      font-size: 13px;
+      color: #555;
+      margin-top: 8px;
+    }
+    #message {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 4px;
+      font-size: 13px;
+      display: none;
+    }
+    #message.success {
+      background: #e8f5e9;
+      border: 1px solid #66bb6a;
+      color: #2e7d32;
+    }
+    #message.error {
+      background: #ffebee;
+      border: 1px solid #ef5350;
+      color: #b71c1c;
+    }
+    .muted {
+      color: #777;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>OpenMarineTracker</h1>
+  <div class="muted">
+    Simple demo page to interact with your APIs (users & ships).
+  </div>
+
+  <!-- Message area -->
+  <div id="message"></div>
+
+  <!-- Ships list -->
+  <h2>All Ships</h2>
+  <div id="shipsContainer">
+    <div class="muted">Loading ships...</div>
+  </div>
+
+  <!-- Auth section -->
+  <h2>User Authentication</h2>
+  <div class="row">
+    <!-- Register -->
+    <div class="card">
+      <h3>Register New User</h3>
+      <form id="registerForm">
+        <label for="regName">Name</label>
+        <input type="text" id="regName" required />
+
+        <label for="regEmail">Email</label>
+        <input type="email" id="regEmail" required />
+
+        <label for="regPassword">Password</label>
+        <input type="password" id="regPassword" required />
+
+        <button type="submit">Register</button>
+      </form>
+    </div>
+
+    <!-- Login -->
+    <div class="card">
+      <h3>Login</h3>
+      <form id="loginForm">
+        <label for="loginEmail">Email</label>
+        <input type="email" id="loginEmail" required />
+
+        <label for="loginPassword">Password</label>
+        <input type="password" id="loginPassword" required />
+
+        <button type="submit">Login</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Current user info -->
+  <div class="meta" id="currentUserInfo">
+    Currently logged in as: <span class="muted">Not logged in</span>
+  </div>
+
+  <!-- Create / Update ship -->
+  <h2>Create / Update Ship</h2>
+  <div class="card">
+    <form id="shipForm">
+      <input type="hidden" id="shipId" />
+      <label for="shipName">Ship Name</label>
+      <input type="text" id="shipName" required />
+
+      <label for="shipCapacity">Capacity</label>
+      <input type="number" id="shipCapacity" required />
+
+      <label for="shipYear">Year</label>
+      <input type="number" id="shipYear" required />
+
+      <div>
+        <button type="submit" id="shipSubmitBtn">Create Ship</button>
+        <button type="button" class="secondary" id="shipResetBtn">Reset</button>
+      </div>
+      <div class="muted" style="margin-top:6px;">
+        * Only logged-in users can create, update, or delete ships.
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // Use same-origin API base (this HTML is assumed to be served from the same domain as backend)
+  const apiBase = '/api';
+  const userBase = '/api/user';
+
+  // Ensure cookies are sent with axios (for JWT httpOnly cookie)
+  axios.defaults.withCredentials = true;
+
+  let currentUser = null;      // { id, name, email }
+  let isSubmitting = false;
+
+  const messageBox = document.getElementById('message');
+  const shipsContainer = document.getElementById('shipsContainer');
+  const currentUserInfo = document.getElementById('currentUserInfo');
+
+  const registerForm = document.getElementById('registerForm');
+  const loginForm = document.getElementById('loginForm');
+  const shipForm = document.getElementById('shipForm');
+  const shipIdInput = document.getElementById('shipId');
+  const shipNameInput = document.getElementById('shipName');
+  const shipCapacityInput = document.getElementById('shipCapacity');
+  const shipYearInput = document.getElementById('shipYear');
+  const shipSubmitBtn = document.getElementById('shipSubmitBtn');
+  const shipResetBtn = document.getElementById('shipResetBtn');
+
+  function showMessage(type, text) {
+    if (!text) {
+      messageBox.style.display = 'none';
+      return;
+    }
+    messageBox.className = '';
+    messageBox.classList.add(type === 'error' ? 'error' : 'success');
+    messageBox.id = 'message';
+    messageBox.textContent = text;
+    messageBox.style.display = 'block';
+  }
+
+  function updateCurrentUserInfo() {
+    if (currentUser) {
+      currentUserInfo.innerHTML =
+        'Currently logged in as: <strong>' +
+        currentUser.name +
+        '</strong> (' +
+        currentUser.email +
+        ')';
+    } else {
+      currentUserInfo.innerHTML =
+        'Currently logged in as: <span class="muted">Not logged in</span>';
+    }
+  }
+
+  async function fetchShips() {
+    shipsContainer.innerHTML = '<div class="muted">Loading ships...</div>';
+    try {
+      const res = await axios.get(apiBase + '/ships');
+      const ships = res.data?.data?.ships || [];
+      renderShips(ships);
+    } catch (err) {
+      console.error(err);
+      shipsContainer.innerHTML = '<div class="muted">Failed to load ships.</div>';
+    }
+  }
+
+  function renderShips(ships) {
+    if (!ships.length) {
+      shipsContainer.innerHTML = '<div class="muted">No ships found.</div>';
+      return;
+    }
+
+    const table = document.createElement('table');
+    table.className = 'ships-table';
+
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+      <tr>
+        <th>Name</th>
+        <th>Capacity</th>
+        <th>Year</th>
+        <th>Creator</th>
+        <th>Actions</th>
+      </tr>
+    `;
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+
+    ships.forEach(ship => {
+      const tr = document.createElement('tr');
+
+      const creatorName = ship.createdBy?.name || '—';
+      const creatorEmail = ship.createdBy?.email || '—';
+
+      tr.innerHTML = `
+        <td>${ship.name || ''}</td>
+        <td>${ship.capacity ?? ''}</td>
+        <td>${ship.year ?? ''}</td>
+        <td>${creatorName}<br/><span class="muted">${creatorEmail}</span></td>
+        <td></td>
+      `;
+
+      const actionsTd = tr.querySelector('td:last-child');
+
+      const updateBtn = document.createElement('button');
+      updateBtn.textContent = 'Update';
+      updateBtn.onclick = () => handlePrefillShipForm(ship);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.classList.add('danger');
+      deleteBtn.style.marginLeft = '6px';
+      deleteBtn.onclick = () => handleDeleteShip(ship);
+
+      actionsTd.appendChild(updateBtn);
+      actionsTd.appendChild(deleteBtn);
+
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    shipsContainer.innerHTML = '';
+    shipsContainer.appendChild(table);
+  }
+
+  function handlePrefillShipForm(ship) {
+    if (!currentUser) {
+      alert('Please login to update ships.');
+      return;
+    }
+    shipIdInput.value = ship._id;
+    shipNameInput.value = ship.name || '';
+    shipCapacityInput.value = ship.capacity ?? '';
+    shipYearInput.value = ship.year ?? '';
+    shipSubmitBtn.textContent = 'Update Ship';
+  }
+
+  function resetShipForm() {
+    shipIdInput.value = '';
+    shipNameInput.value = '';
+    shipCapacityInput.value = '';
+    shipYearInput.value = '';
+    shipSubmitBtn.textContent = 'Create Ship';
+  }
+
+  async function handleDeleteShip(ship) {
+    if (!currentUser) {
+      alert('Please login to delete ships.');
+      return;
+    }
+    const confirmDelete = confirm(
+      `Are you sure you want to delete ship "${ship.name}"?`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      await axios.delete(apiBase + '/ship/' + ship._id);
+      showMessage('success', 'Ship deleted successfully.');
+      fetchShips();
+    } catch (err) {
+      console.error(err);
+      const msg =
+        err.response?.data?.message || 'Failed to delete ship. Maybe not authorized.';
+      showMessage('error', msg);
+    }
+  }
+
+  // Register form submit
+  registerForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (isSubmitting) return;
+    isSubmitting = true;
+
+    const name = document.getElementById('regName').value.trim();
+    const email = document.getElementById('regEmail').value.trim();
+    const password = document.getElementById('regPassword').value;
+
+    try {
+      const res = await axios.post(userBase + '/register', {
+        name,
+        email,
+        password
+      });
+      currentUser = res.data?.user || null;
+      updateCurrentUserInfo();
+      showMessage('success', 'Registered successfully.');
+      registerForm.reset();
+    } catch (err) {
+      console.error(err);
+      const msg =
+        err.response?.data?.message ||
+        (err.response?.data?.errors && err.response.data.errors.join(', ')) ||
+        'Registration failed.';
+      showMessage('error', msg);
+    } finally {
+      isSubmitting = false;
+    }
+  });
+
+  // Login form submit
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (isSubmitting) return;
+    isSubmitting = true;
+
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    try {
+      const res = await axios.post(userBase + '/login', {
+        email,
+        password
+      });
+      currentUser = res.data?.user || null;
+      updateCurrentUserInfo();
+      showMessage('success', 'Logged in successfully.');
+      loginForm.reset();
+    } catch (err) {
+      console.error(err);
+      const msg =
+        err.response?.data?.message || 'Login failed. Check your credentials.';
+      showMessage('error', msg);
+    } finally {
+      isSubmitting = false;
+    }
+  });
+
+  // Ship form submit (create or update)
+  shipForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!currentUser) {
+      alert('Please login to create or update ships.');
+      return;
+    }
+    if (isSubmitting) return;
+    isSubmitting = true;
+
+    const id = shipIdInput.value;
+    const name = shipNameInput.value.trim();
+    const capacity = Number(shipCapacityInput.value);
+    const year = Number(shipYearInput.value);
+
+    const payload = { name, capacity, year };
+
+    try {
+      if (id) {
+        // update
+        const res = await axios.put(apiBase + '/ship/' + id, payload);
+        showMessage('success', res.data?.message || 'Ship updated successfully.');
+      } else {
+        // create
+        const res = await axios.post(apiBase + '/ship', payload);
+        showMessage('success', res.data?.message || 'Ship created successfully.');
+      }
+      resetShipForm();
+      fetchShips();
+    } catch (err) {
+      console.error(err);
+      const msg =
+        err.response?.data?.message || 'Failed to save ship. Maybe not authorized.';
+      showMessage('error', msg);
+    } finally {
+      isSubmitting = false;
+    }
+  });
+
+  shipResetBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    resetShipForm();
+  });
+
+  // Initial load
+  updateCurrentUserInfo();
+  fetchShips();
+</script>
+</body>
+</html>

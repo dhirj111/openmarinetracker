@@ -76,7 +76,7 @@ exports.register = async (req, res) => {
 };
 
 exports.login = async (req, res) => {
-  console.log("1", req.body)
+
   try {
     const validation = loginSchema.safeParse(req.body);
 
@@ -86,7 +86,6 @@ exports.login = async (req, res) => {
 
     let { email, password } = validation.data;
     email = email.toLowerCase().trim();
-    console.log("2", validation.data)
     const user = await User.findOne({ email });
 
     if (!user)

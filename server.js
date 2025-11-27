@@ -6,7 +6,7 @@ const cookieParser = require('cookie-parser');
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
-
+app.use(express.static(path.join(__dirname, 'public')));
 
 const shiproute = require('./routes/shiproutes');
 const userroute = require('./routes/userroutes');
@@ -32,3 +32,6 @@ app.get('/health', (req, res) => {
 });
 
 
+app.use((req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
